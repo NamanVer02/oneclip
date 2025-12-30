@@ -80,12 +80,37 @@ export async function POST(request: NextRequest) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Edge Config API error:', errorText);
+        console.error('Edge Config API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          connectionStringId,
+        });
         // Still return the data even if Edge Config update fails
+        return NextResponse.json({
+          ...clipboardData,
+          _debug: {
+            edgeConfigUpdateFailed: true,
+            status: response.status,
+            error: errorText,
+          }
+        }, { status: 200 });
       }
+
+      console.log('Successfully updated Edge Config');
     } catch (apiError) {
-      console.error('Error calling Edge Config API:', apiError);
+      console.error('Error calling Edge Config API:', {
+        error: apiError instanceof Error ? apiError.message : 'Unknown error',
+        connectionStringId,
+      });
       // Still return the data even if Edge Config update fails
+      return NextResponse.json({
+        ...clipboardData,
+        _debug: {
+          edgeConfigUpdateFailed: true,
+          error: apiError instanceof Error ? apiError.message : 'Unknown error',
+        }
+      }, { status: 200 });
     }
     
     return NextResponse.json(clipboardData, { status: 200 });
