@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Mobile-friendly touch targets */
+@media (max-width: 640px) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Prevent text selection on buttons for better mobile UX */
+button {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Smooth scrolling for code blocks */
+pre {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Better code block wrapping on mobile */
+@media (max-width: 640px) {
+  pre code {
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+}

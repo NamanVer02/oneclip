@@ -1,86 +1,100 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { toast } from 'sonner';
-
-export interface ClipboardData {
-  content: string;
-  type: string;
-  language: string | null;
-  timestamp: number;
-}
 
 export function useClipboard() {
-  const [data, setData] = useState<ClipboardData | null>(null);
+  const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchClipboard = useCallback(async () => {
+  // Fetch clipboard item from API
+  const fetchItem = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch('/api/clipboard/get');
+      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch clipboard content');
+      if (data.success) {
+        setContent(data.content || null);
+      } else {
+        setError(data.error || 'Failed to fetch clipboard item');
       }
-
-      const clipboardData = await response.json();
-      setData(clipboardData);
-    } catch (error) {
-      console.error('Error fetching clipboard:', error);
-      toast.error('Failed to load clipboard content');
-      // Set default empty state
-      setData({
-        content: '',
-        type: 'text',
-        language: null,
-        timestamp: Date.now(),
-      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch clipboard item');
+      console.error('Error fetching clipboard item:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const updateClipboard = useCallback(async (content: string) => {
+  // Save a new clipboard item (replaces the previous one)
+  const saveItem = useCallback(async (newContent: string) => {
     try {
-      setUpdating(true);
+      setError(null);
       const response = await fetch('/api/clipboard/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content: newContent }),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update clipboard');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh from Edge Config to ensure we have the latest data
+        await fetchItem();
+        return true;
+      } else {
+        setError(data.error || 'Failed to save clipboard item');
+        return false;
       }
-
-      const updatedData = await response.json();
-      setData(updatedData);
-      toast.success('Clipboard updated successfully');
-      return updatedData;
-    } catch (error) {
-      console.error('Error updating clipboard:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update clipboard';
-      toast.error(errorMessage);
-      throw error;
-    } finally {
-      setUpdating(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save clipboard item';
+      setError(errorMessage);
+      console.error('Error saving clipboard item:', err);
+      return false;
     }
-  }, []);
+  }, [fetchItem]);
 
+  // Clear the clipboard item
+  const clearItem = useCallback(async () => {
+    try {
+      setError(null);
+      const response = await fetch('/api/clipboard/update', {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Refresh from Edge Config to ensure we have the latest data
+        await fetchItem();
+        return true;
+      } else {
+        setError(data.error || 'Failed to clear clipboard item');
+        return false;
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to clear clipboard item';
+      setError(errorMessage);
+      console.error('Error clearing clipboard item:', err);
+      return false;
+    }
+  }, [fetchItem]);
+
+  // Load item on mount
   useEffect(() => {
-    fetchClipboard();
-  }, [fetchClipboard]);
+    fetchItem();
+  }, [fetchItem]);
 
   return {
-    data,
+    content,
     loading,
-    updating,
-    fetchClipboard,
-    updateClipboard,
+    error,
+    saveItem,
+    clearItem,
+    refresh: fetchItem,
   };
 }
-

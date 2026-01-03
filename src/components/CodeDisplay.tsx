@@ -1,116 +1,59 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useState, useEffect } from 'react';
-
-// Dynamically import syntax highlighter to avoid SSR issues
-const SyntaxHighlighter = dynamic(
-  () => import('react-syntax-highlighter').then((mod) => mod.Prism),
-  { ssr: false }
-);
-
-// Dynamically import the theme
-let oneDark: any = null;
-if (typeof window !== 'undefined') {
-  import('react-syntax-highlighter/dist/cjs/styles/prism').then((mod) => {
-    oneDark = mod.oneDark;
-  });
-}
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { ClipboardItem } from '@/hooks/useClipboard';
 
 interface CodeDisplayProps {
-  content: string;
-  language: string | null;
-  type: string;
+  item: ClipboardItem;
 }
 
-export default function CodeDisplay({ content, language, type }: CodeDisplayProps) {
-  const [copied, setCopied] = useState(false);
-  const [theme, setTheme] = useState<any>(null);
-
-  useEffect(() => {
-    // Load theme on client side
-    import('react-syntax-highlighter/dist/cjs/styles/prism').then((mod) => {
-      setTheme(mod.oneDark);
-    });
-  }, []);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
+export function CodeDisplay({ item }: CodeDisplayProps) {
+  const detectLanguage = (content: string): string => {
+    // Simple language detection based on content patterns
+    if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+      return 'json';
     }
+    if (content.includes('function') || content.includes('const ') || content.includes('let ')) {
+      return 'javascript';
+    }
+    if (content.includes('def ') || content.includes('import ')) {
+      return 'python';
+    }
+    if (content.includes('<!DOCTYPE') || content.includes('<html')) {
+      return 'html';
+    }
+    if (content.includes('SELECT') || content.includes('FROM')) {
+      return 'sql';
+    }
+    return 'text';
   };
 
-  // If no language detected or plain text, display as plain text
-  if (!language || type === 'text') {
-    return (
-      <div className="relative group">
-        <div className="absolute top-4 right-4 z-10">
-          <button
-            onClick={handleCopy}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-        <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 min-h-[200px]">
-          <pre className="whitespace-pre-wrap break-words font-mono text-sm text-gray-900 dark:text-gray-100">
-            {content || <span className="text-gray-400 italic">No content</span>}
-          </pre>
-        </div>
-      </div>
-    );
-  }
-
-  // Display with syntax highlighting
-  if (!theme) {
-    // Fallback while theme loads
-    return (
-      <div className="relative group">
-        <div className="absolute top-4 right-4 z-10">
-          <button
-            onClick={handleCopy}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-4 min-h-[200px] border border-gray-200 dark:border-gray-800">
-          <pre className="text-gray-100 font-mono text-sm whitespace-pre-wrap">{content}</pre>
-        </div>
-      </div>
-    );
-  }
+  const language = item.type !== 'text' ? item.type : detectLanguage(item.content);
 
   return (
-    <div className="relative group">
-      <div className="absolute top-4 right-4 z-10">
-        <button
-          onClick={handleCopy}
-          className="px-3 py-1.5 text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
+    <div className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+        <span className="text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+          {language}
+        </span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-500">
+          {new Date(item.timestamp).toLocaleString()}
+        </span>
       </div>
-      <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
-        <SyntaxHighlighter
-          language={language}
-          style={theme}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            fontSize: '0.875rem',
-            lineHeight: '1.5',
-            minHeight: '200px',
-          }}
-          wrapLongLines
-        >
-          {content}
-        </SyntaxHighlighter>
-      </div>
+      <SyntaxHighlighter
+        language={language}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          padding: '1rem',
+          fontSize: '0.875rem',
+          borderRadius: 0,
+        }}
+        showLineNumbers
+      >
+        {item.content}
+      </SyntaxHighlighter>
     </div>
   );
 }

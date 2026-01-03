@@ -1,47 +1,54 @@
 import { NextResponse } from 'next/server';
-import { get } from '@vercel/edge-config';
+import { getEdgeConfigInstance, getClipboardItem } from '@/lib/edge-config';
 
 export const runtime = 'edge';
 
-const CLIPBOARD_KEY = 'clipboard_content';
-
 export async function GET() {
-  const debugInfo: any = {
-    timestamp: new Date().toISOString(),
-    edgeConfig: {
-      // Note: process.env.EDGE_CONFIG may not be accessible in edge runtime
-      // It's automatically injected by Vercel when Edge Config is linked
-      note: 'EDGE_CONFIG is automatically available when linked to project',
-    },
-    test: {
-      canRead: false,
-      error: null,
-      data: null,
-    },
-  };
-
   try {
-    // Try to read from Edge Config
-    // This will work if Edge Config is properly linked to the project
-    const data = await get(CLIPBOARD_KEY);
-    debugInfo.test.canRead = true;
-    debugInfo.test.data = data;
-    debugInfo.test.success = true;
-  } catch (error) {
-    debugInfo.test.error = {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      name: error instanceof Error ? error.name : 'Unknown',
-    };
-    debugInfo.test.success = false;
+    // Check if EDGE_CONFIG is set
+    const hasEdgeConfig = !!process.env.EDGE_CONFIG;
     
-    // Provide helpful debugging info
-    if (error instanceof Error) {
-      if (error.message.includes('EDGE_CONFIG') || error.message.includes('connection')) {
-        debugInfo.test.suggestion = 'Make sure Edge Config is linked to your Vercel project in the dashboard';
-      }
+    // Try to get Edge Config instance
+    let edgeConfigStatus = 'unknown';
+    try {
+      const edgeConfig = getEdgeConfigInstance();
+      edgeConfigStatus = 'connected';
+    } catch (error) {
+      edgeConfigStatus = `error: ${error instanceof Error ? error.message : 'Unknown error'}`;
     }
-  }
 
-  return NextResponse.json(debugInfo, { status: 200 });
+    // Try to get clipboard item
+    let item = null;
+    let itemError = null;
+    try {
+      item = await getClipboardItem();
+    } catch (error) {
+      itemError = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    return NextResponse.json({
+      debug: {
+        hasEdgeConfigEnvVar: hasEdgeConfig,
+        edgeConfigEnvVarLength: process.env.EDGE_CONFIG?.length || 0,
+        edgeConfigStatus,
+        hasItem: item !== null,
+        itemLength: item?.length || 0,
+        itemError,
+        itemPreview: item ? (item.length > 100 ? item.substring(0, 100) + '...' : item) : null,
+      },
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        vercelEnv: process.env.VERCEL_ENV,
+      },
+    }, { status: 200 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+      },
+      { status: 500 }
+    );
+  }
 }
 

@@ -1,41 +1,85 @@
-import { get } from '@vercel/edge-config';
-
-export interface ClipboardContent {
-  content: string;
-  type: string;
-  language: string | null;
-  timestamp: number;
-}
-
-const CLIPBOARD_KEY = 'clipboard_content';
+import { createClient } from '@vercel/edge-config';
 
 /**
- * Get clipboard content from Edge Config
+ * Get the Edge Config client instance for reading
+ * This requires EDGE_CONFIG environment variable to be set
  */
-export async function getClipboardContent(): Promise<ClipboardContent | null> {
+export function getEdgeConfigInstance() {
   try {
-    // Check if EDGE_CONFIG is available
     if (!process.env.EDGE_CONFIG) {
-      console.warn('EDGE_CONFIG environment variable not set');
-      return null;
+      throw new Error('EDGE_CONFIG environment variable is not set');
     }
-
-    const data = await get<ClipboardContent>(CLIPBOARD_KEY);
-    
-    if (!data) {
-      console.log('No clipboard content found in Edge Config');
-      return null;
-    }
-
-    return data;
+    const edgeConfig = createClient(process.env.EDGE_CONFIG);
+    return edgeConfig;
   } catch (error) {
-    console.error('Error fetching clipboard content from Edge Config:', error);
-    // Log more details about the error
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
+    console.error('Failed to get Edge Config instance:', error);
+    throw new Error('Edge Config is not properly configured. Please check your EDGE_CONFIG environment variable.');
+  }
+}
+
+/**
+ * Get the single clipboard item from Edge Config (read operation)
+ */
+export async function getClipboardItem(): Promise<string | null> {
+  try {
+    const edgeConfig = getEdgeConfigInstance();
+    const item = await edgeConfig.get('clipboardItem');
+    return typeof item === 'string' ? item : null;
+  } catch (error) {
+    console.error('Failed to get clipboard item:', error);
     return null;
   }
 }
 
+/**
+ * Save a single clipboard item to Edge Config using Vercel REST API
+ * Edge Config writes must use the REST API, not the SDK
+ */
+export async function saveClipboardItem(content: string): Promise<boolean> {
+  try {
+    const edgeConfigId = process.env.EDGE_CONFIG;
+    const vercelToken = process.env.VERCEL_TOKEN;
+
+    if (!edgeConfigId) {
+      throw new Error('EDGE_CONFIG environment variable is not set');
+    }
+
+    if (!vercelToken) {
+      throw new Error('VERCEL_TOKEN environment variable is not set. Required for writing to Edge Config.');
+    }
+
+    // Extract the connection string ID from EDGE_CONFIG
+    // EDGE_CONFIG format: https://edge-config.vercel.com/{id}?token={token}
+    const urlMatch = edgeConfigId.match(/edge-config\.vercel\.com\/([^?]+)/);
+    const configId = urlMatch ? urlMatch[1] : edgeConfigId;
+
+    // Use Vercel REST API to update Edge Config
+    const response = await fetch(`https://api.vercel.com/v1/edge-config/${configId}/items`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${vercelToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            operation: 'upsert',
+            key: 'clipboardItem',
+            value: content,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to save to Edge Config:', response.status, errorText);
+      throw new Error(`Failed to save: ${response.status} ${errorText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to save clipboard item:', error);
+    return false;
+  }
+}
