@@ -5,6 +5,9 @@ import { FormattedDisplay } from '@/components/FormattedDisplay';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+// Edge Config has an 8KB limit on Hobby plan
+const MAX_CONTENT_SIZE = 8 * 1024; // 8KB in bytes
+
 export default function Home() {
   const { content, loading, error, saveItem, refresh } = useClipboard();
   const [pasteValue, setPasteValue] = useState('');
@@ -25,6 +28,14 @@ export default function Home() {
     const text = textToSave || pasteValue.trim();
     if (!text) {
       toast.error('Please enter some content');
+      return;
+    }
+
+    // Check content size before attempting to save
+    const contentSize = new TextEncoder().encode(text).length;
+    if (contentSize > MAX_CONTENT_SIZE) {
+      const sizeKB = (contentSize / 1024).toFixed(2);
+      toast.error(`Content too large: ${sizeKB}KB exceeds the 8KB limit. Please reduce the content size.`);
       return;
     }
 

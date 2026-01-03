@@ -35,8 +35,17 @@ export async function getClipboardItem(): Promise<string | null> {
  * Save a single clipboard item to Edge Config using Vercel REST API
  * Edge Config writes must use the REST API, not the SDK
  */
-export async function saveClipboardItem(content: string): Promise<boolean> {
+// Edge Config has an 8KB limit on Hobby plan
+const MAX_CONTENT_SIZE = 8 * 1024; // 8KB in bytes
+
+export async function saveClipboardItem(content: string): Promise<void> {
   try {
+    // Check content size before attempting to save
+    const contentSize = new TextEncoder().encode(content).length;
+    if (contentSize > MAX_CONTENT_SIZE) {
+      throw new Error(`Content exceeds the 8KB limit. Current size: ${(contentSize / 1024).toFixed(2)}KB, maximum: 8KB`);
+    }
+
     const edgeConfigId = process.env.EDGE_CONFIG;
     const vercelToken = process.env.VERCEL_TOKEN;
 
@@ -74,12 +83,17 @@ export async function saveClipboardItem(content: string): Promise<boolean> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Failed to save to Edge Config:', response.status, errorText);
+      
+      // Check if error is due to size limit (8KB for Hobby plan)
+      if (response.status === 413 || errorText.includes('size') || errorText.includes('limit') || errorText.includes('exceed')) {
+        throw new Error('Storage limit reached: Content exceeds the 8KB Edge Config limit. Please reduce the content size.');
+      }
+      
       throw new Error(`Failed to save: ${response.status} ${errorText}`);
     }
-
-    return true;
   } catch (error) {
     console.error('Failed to save clipboard item:', error);
-    return false;
+    // Re-throw the error so the API route can handle it properly
+    throw error;
   }
 }

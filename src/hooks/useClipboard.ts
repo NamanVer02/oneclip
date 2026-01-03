@@ -53,7 +53,9 @@ export function useClipboard() {
         await fetchItem();
         return true;
       } else {
-        setError(data.error || 'Failed to save clipboard item');
+        // Handle size limit errors (413) or other errors
+        const errorMessage = data.error || 'Failed to save clipboard item';
+        setError(errorMessage);
         return false;
       }
     } catch (err) {
