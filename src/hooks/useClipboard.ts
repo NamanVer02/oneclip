@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+export interface ClipboardItem {
+  type: string;
+  content: string;
+  timestamp: string;
+}
+
 export function useClipboard() {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
